@@ -1,5 +1,5 @@
 Be advised, this repo is constantly in progress.
-Unless you wanna hack a lot, use the main https://github.com/jdarling/Object.observe
+If all you want is to use a polyfill, use the main https://github.com/jdarling/Object.observe
 
 Object.observe Polyfill/shim
 ============================
