@@ -17,9 +17,9 @@
 TODO:
   Add support for Object.prototype.watch -> https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/watch
 */
-"use strict";
 if(!Object.observe){
   (function(extend, global){
+    "use strict";
     var isCallable = (function(toString){
         var s = toString.call(toString),
             u = typeof u;
@@ -49,6 +49,9 @@ if(!Object.observe){
     }
     var _isImmediateSupported = (function(){
       return !!global.setImmediate;
+    })();
+    var _isWeakMapSupported = (function() {
+      return !!global.WeakMap;
     })();
     var _doCheckCallback = (function(){
       if(_isImmediateSupported){
@@ -330,34 +333,74 @@ if(!Object.observe){
       self._checkPropertyListing(true);
     };
 
-    var _notifiers=[], _indexes=[];
-    extend.getNotifier = function(O){
-    var idx = _indexes.indexOf(O), notifier = idx>-1?_notifiers[idx]:false;
-      if(!notifier){
-        idx = _indexes.length;
-        _indexes[idx] = O;
-        notifier = _notifiers[idx] = new Notifier(O);
+    if (_isWeakMapSupported) {
+      var _notifiers = new WeakMap();
+    }
+    else {
+      var _notifiers=[], _indexes=[];
+    }
+    extend.getNotifier = (function() {
+      var gn;
+      if (_isWeakMapSupported) {
+        gn = function(O) {
+          var notifier = _notifiers.get(O);
+          if (!notifier) {
+            notifier = new Notifier(O);
+            _notifiers.set(O, notifier);
+          }
+          return notifier;
+        };
       }
-      return notifier;
-    };
+      else {
+        gn = function(O){
+          var idx = _indexes.indexOf(O), notifier = idx>-1?_notifiers[idx]:false;
+          if(!notifier){
+            idx = _indexes.length;
+            _indexes[idx] = O;
+            notifier = _notifiers[idx] = new Notifier(O);
+          }
+          return notifier;
+        };
+      }
+      return gn;
+    })();
     extend.observe = function(O, callback, accept){
       // For Bug 4, can't observe DOM elements tested against canry implementation and matches
       if(!isElement(O)){
         return new Observer(O, callback, accept);
       }
     };
-    extend.unobserve = function(O, callback){
-      validateArguments(O, callback);
-      var idx = _indexes.indexOf(O),
-          notifier = idx>-1?_notifiers[idx]:false;
-      if (!notifier){
-        return;
+    extend.unobserve = (function() {
+      var un;
+      if (_isWeakMapSupported) {
+        un = function(O, callback) {
+          validateArguments(O, callback);
+          var notifier = _notifiers.get(O);
+          if (!notifier) {
+            return;
+          }
+          notifier.removeListener(callback);
+          if (notifier.listeners().length === 0) {
+            _notifiers.delete(O);
+          }
+        };
       }
-      notifier.removeListener(callback);
-      if (notifier.listeners().length === 0){
-        _indexes.splice(idx, 1);
-        _notifiers.splice(idx, 1);
+      else {
+        un = function(O, callback){
+          validateArguments(O, callback);
+          var idx = _indexes.indexOf(O),
+            notifier = idx>-1?_notifiers[idx]:false;
+          if (!notifier){
+            return;
+          }
+          notifier.removeListener(callback);
+          if (notifier.listeners().length === 0){
+            _indexes.splice(idx, 1);
+            _notifiers.splice(idx, 1);
+          }
+        };
       }
-    };
+      return un;
+    })();
   })(Object, this);
 }
